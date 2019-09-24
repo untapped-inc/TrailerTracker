@@ -18,7 +18,6 @@ struct Coordinates {
 Coordinates getGPSCoordinates();
 float averageArray(float *latArray);
 float formatCoordinate(float coordinate);
-// void clearArray(char *arrayToClear);
 
 /** BEGIN CONSTANTS **/
 
@@ -40,9 +39,9 @@ void setup() {
 void loop() {
    Coordinates currentLocation = getGPSCoordinates();
    Serial.print("Location: ");
-   Serial.print(currentLocation.Latitude);
+   Serial.printf("%.5f", currentLocation.Latitude);
    Serial.print(", ");
-   Serial.println(currentLocation.Longitude);
+   Serial.printf("%.5f", currentLocation.Longitude);
 
    delay(100);
 }
@@ -108,8 +107,6 @@ Coordinates getGPSCoordinates(){
                 float longitude = atof(longitudeBuffer);
                 //check that the longitude was actually read
                 if (longitude > 0){
-                  Serial.print("is east: ");
-                  Serial.println(isEast);
                   //increment the sample count
                   longArray[sampleCount++] = isEast ? formatCoordinate(longitude) : (-1.0 * formatCoordinate(longitude));
                 }
@@ -154,14 +151,5 @@ float averageArray(float *latArray){
 float formatCoordinate(float coordinate){
   int degrees = int(coordinate/100);
   float minutes = coordinate - float(degrees * 100);
-  Serial.println(float(degrees) + float(minutes/60.000));
   return float(degrees) + minutes/60.0;
 }
-
-// //helper function to clear an array
-// void clearArray(char *arrayToClear){
-//     int i;
-//     for (i = 0; i < sizeof(arrayToClear); i++){
-//         arrayToClear[i] = '\0';
-//     }
-// }
