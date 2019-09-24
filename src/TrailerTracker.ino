@@ -30,13 +30,13 @@ const int BUFFER_SIZE = 300;
 const char* GPS_ID = "GPGGA";
 const int FLOWMETER_PIN = A0;
 //this value comes from the datasheet of whatever flowmeter you are using - change to whatever your flowmeter specifies
-const float LITERS_PER_PULSE = 1.0f/450.0f;
+const double LITERS_PER_PULSE = 0.0022;
 
 
 /** END CONSTANTS **/
 
-//global to track the total volume (in liters) passed through the pipes
-double volumeConsumed = 0.0;
+//global to track the total pulses passed through the pipes
+volatile long pulses = 0l;
 
 void setup() {
     Serial.begin(115200);
@@ -56,7 +56,7 @@ void loop() {
    Serial.printf("%.5f", currentLocation.Longitude);
    Serial.println();
    Serial.print("Volume: ");
-   Serial.printf("%.3d", volumeConsumed);
+   Serial.print(pulses * LITERS_PER_PULSE);
    Serial.println();
 
    delay(100);
@@ -173,5 +173,5 @@ float formatCoordinate(float coordinate){
 
 //this function should be triggered a pulse on the flowmeter's analog pin
 void flowmeterPulseDetected(){
-  volumeConsumed += LITERS_PER_PULSE;
+  pulses++;
 }
