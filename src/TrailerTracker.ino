@@ -1,5 +1,6 @@
 #pragma SPARK_NO_PREPROCESSOR // see https://community.particle.io/t/c-struct-as-parameter-to-methods/27065 as to why this is necessary
 #include "Particle.h"
+#include "HttpClient.h"
 /*
  * Project TrailerTracker
  * Description: This Particle Boron code was written to collect GPS, Flowmeter, and Eletrical Current data from Untapped's trailers in Haiti
@@ -19,6 +20,8 @@ Coordinates getGPSCoordinates();
 float averageArray(float *latArray);
 float formatCoordinate(float coordinate);
 void flowmeterPulseDetected();
+double getVolume();
+void sendData(float longitude, float latitude, double volume);
 
 /** BEGIN CONSTANTS **/
 
@@ -31,12 +34,28 @@ const char* GPS_ID = "GPGGA";
 const int FLOWMETER_PIN = A0;
 //this value comes from the datasheet of whatever flowmeter you are using - change to whatever your flowmeter specifies
 const double LITERS_PER_PULSE = 0.0022;
+//this is used to send data to the API endpoint
+const char* HOSTNAME = "api.thingspeak.com";
+const char* PATH = "/update?api_key=X0AVGKDUHRKS2GK9&field1=%.5f&field2=%.5f&field3=%.4f&field4=%.2f";
 
 
 /** END CONSTANTS **/
 
 //global to track the total pulses passed through the pipes
-volatile long pulses = 0l;
+volatile long pulseA = 0l;
+volatile long pulseB = 0l;
+bool isPulseA = true;
+
+//variables to manage http connections
+HttpClient http;
+http_request_t request;
+http_response_t response;
+//HTTP request headers
+http_header_t headers[] = {
+    { "Accept" , "application/json" },
+    { NULL, NULL } // application.ino says that terminating the headers is necessary
+};
+
 
 void setup() {
     Serial.begin(115200);
@@ -56,8 +75,11 @@ void loop() {
    Serial.printf("%.5f", currentLocation.Longitude);
    Serial.println();
    Serial.print("Volume: ");
-   Serial.print(pulses * LITERS_PER_PULSE);
+   double volumeInLiters = getVolume();
+   Serial.print(volumeInLiters);
    Serial.println();
+
+  sendData(currentLocation.Longitude, currentLocation.Latitude, volumeInLiters);
 
    delay(100);
 }
@@ -173,5 +195,49 @@ float formatCoordinate(float coordinate){
 
 //this function should be triggered a pulse on the flowmeter's analog pin
 void flowmeterPulseDetected(){
-  pulses++;
+  if(isPulseA){
+    pulseA++;
+  }else{
+    pulseB++;
+  }
+}
+
+//this helper function gets the total volume through the system and toggles between pulse A and B
+double getVolume(){
+  double volume;
+  if (isPulseA){
+    volume = (pulseA * LITERS_PER_PULSE);
+  }else{
+    volume = (pulseB * LITERS_PER_PULSE);
+  }
+  //toggle which variable we store the pulse in since theflowmeter needs to be able to continue to send data even if we are in the middle of transmission
+  isPulseA = !isPulseA;
+  return volume;
+}
+
+void sendData(float longitude, float latitude, double volume){
+  //setup API call
+  request.hostname = HOSTNAME;
+  char formattedRequest[300];
+  sprintf(formattedRequest, PATH, longitude, latitude, volume, 1);
+  request.path = formattedRequest;
+
+  //send the data
+  http.get(request, response, headers);
+  //check for a successful transmission
+  if (response.status == 200){
+    //reset the volume that was just passed to the API endpoint if successful
+    if(isPulseA){
+      //we've already switched the pulse at this point, so the volume that we need to clear is the previous one
+      pulseB = 0l;
+    }else{
+      pulseA = 0l;
+    }
+  }else{
+    Serial.println("Request Failed. Retrying...");
+    Serial.print("formattedrequest:   ");
+    Serial.println(formattedRequest);
+    //if the request fails, retry...
+    sendData(longitude, latitude, volume);
+  }
 }
