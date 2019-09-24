@@ -5,7 +5,7 @@ A Particle Boron project to capture Flowmeter, Electrical Current, and Sensor da
 Developed using Visual Studio Code and the Particle Workbench Extension.
 
 
-#Boiler Plate from Particle:
+# Boiler Plate from Particle:
 
 ## Welcome to your project!
 
