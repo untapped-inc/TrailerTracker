@@ -18,6 +18,7 @@ struct Coordinates {
 Coordinates getGPSCoordinates();
 float averageArray(float *latArray);
 float formatCoordinate(float coordinate);
+void flowmeterPulseDetected();
 
 /** BEGIN CONSTANTS **/
 
@@ -27,13 +28,24 @@ const int MIN_GPS_SAMPLES = 5;
 const int BUFFER_SIZE = 300;
 //the prefix that identifies the line of the GPS transmission that we pull the lat and long from
 const char* GPS_ID = "GPGGA";
+const int FLOWMETER_PIN = A0;
+//this value comes from the datasheet of whatever flowmeter you are using - change to whatever your flowmeter specifies
+const float LITERS_PER_PULSE = 1.0f/450.0f;
+
 
 /** END CONSTANTS **/
+
+//global to track the total volume (in liters) passed through the pipes
+double volumeConsumed = 0.0;
 
 void setup() {
     Serial.begin(115200);
     //begin Serial 1 at 9600 baudrate to read GP-20U7 module from RX pin
     Serial1.begin(9600);
+
+    //setup the flowmeter analog pin with an interrupt
+    pinMode(FLOWMETER_PIN, INPUT);                                     
+    attachInterrupt(FLOWMETER_PIN, flowmeterPulseDetected, RISING);    
 }
 
 void loop() {
@@ -42,6 +54,10 @@ void loop() {
    Serial.printf("%.5f", currentLocation.Latitude);
    Serial.print(", ");
    Serial.printf("%.5f", currentLocation.Longitude);
+   Serial.println();
+   Serial.print("Volume: ");
+   Serial.printf("%.3d", volumeConsumed);
+   Serial.println();
 
    delay(100);
 }
@@ -152,4 +168,10 @@ float formatCoordinate(float coordinate){
   int degrees = int(coordinate/100);
   float minutes = coordinate - float(degrees * 100);
   return float(degrees) + minutes/60.0;
+}
+
+
+//this function should be triggered a pulse on the flowmeter's analog pin
+void flowmeterPulseDetected(){
+  volumeConsumed += LITERS_PER_PULSE;
 }
