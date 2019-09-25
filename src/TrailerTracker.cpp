@@ -37,14 +37,22 @@ const double LITERS_PER_PULSE = 0.0022;
 //this is used to send data to the API endpoint
 const char* HOSTNAME = "api.thingspeak.com";
 const char* PATH = "/update?api_key=X0AVGKDUHRKS2GK9&field1=%.5f&field2=%.5f&field3=%.4f&field4=%.2f";
+//set addresses for the pulse variables in EEPROM memory
+const int PULSEA_ADDRESS = 1;
+const int PULSEB_ADDRESS = 20;
 
+//the number of loops between transmissions
+const int CYCLES_PER_TRANSMISSION = 10;
 
 /** END CONSTANTS **/
 
 //global to track the total pulses passed through the pipes
-volatile long pulseA = 0l;
-volatile long pulseB = 0l;
+long pulseA = 0l;
+long pulseB = 0l;
 bool isPulseA = true;
+
+//track loops between transmissions
+int cycleNumber = 0;
 
 //variables to manage http connections
 HttpClient http;
@@ -64,24 +72,59 @@ void setup() {
 
     //setup the flowmeter analog pin with an interrupt
     pinMode(FLOWMETER_PIN, INPUT);                                     
-    attachInterrupt(FLOWMETER_PIN, flowmeterPulseDetected, RISING);    
+    attachInterrupt(FLOWMETER_PIN, flowmeterPulseDetected, RISING); 
+
+    delay(1000);   
+
+    //check to see if anything is stored in non-volatile memory to recover data that existed prior to a crash/shutdown
+    long pulseAMemory;
+    long pulseBMemory;
+    EEPROM.get(PULSEA_ADDRESS, pulseAMemory);
+    EEPROM.get(PULSEB_ADDRESS, pulseBMemory);
+    Serial.print("Pulse A Memory: ");
+    Serial.println(pulseAMemory);
+    Serial.print("Pulse B Memory");
+    Serial.println(pulseBMemory);
+
+    if (pulseAMemory > 0 && pulseBMemory > 0){
+      //if both have values, set volatile variables with the contents of the data in memory
+      pulseA = pulseAMemory;
+      pulseB = pulseBMemory;
+    }else if(pulseAMemory > 0){
+      //if only one has a value, then start with that pulse
+      pulseA = pulseAMemory;
+      isPulseA = true;
+    }else if(pulseBMemory > 0){
+      pulseB = pulseBMemory;
+      isPulseA = false;
+    }
 }
 
 void loop() {
-   Coordinates currentLocation = getGPSCoordinates();
-   Serial.print("Location: ");
-   Serial.printf("%.5f", currentLocation.Latitude);
-   Serial.print(", ");
-   Serial.printf("%.5f", currentLocation.Longitude);
-   Serial.println();
-   Serial.print("Volume: ");
-   double volumeInLiters = getVolume();
-   Serial.print(volumeInLiters);
-   Serial.println();
 
-  sendData(currentLocation.Longitude, currentLocation.Latitude, volumeInLiters);
+  //send data once every 10 cycles - todo: find a good frequency from Jim
+  if (cycleNumber >= CYCLES_PER_TRANSMISSION){
+    Coordinates currentLocation = getGPSCoordinates();
+    Serial.print("Location: ");
+    Serial.printf("%.5f", currentLocation.Latitude);
+    Serial.print(", ");
+    Serial.printf("%.5f", currentLocation.Longitude);
+    Serial.println();
+    Serial.print("Volume: ");
+    double volumeInLiters = getVolume();
+    Serial.print(volumeInLiters);
+    Serial.println();
 
-   delay(100);
+    sendData(currentLocation.Longitude, currentLocation.Latitude, volumeInLiters);
+  }
+
+  //periodically save to EEPROM - this helps minimize data loss in the event of a crash
+  EEPROM.put(PULSEA_ADDRESS, pulseA);
+  EEPROM.put(PULSEA_ADDRESS, pulseB);
+
+  cycleNumber++;
+
+  delay(100);
 }
 
 //helper function to get the GPS coordinates from the GPS module
